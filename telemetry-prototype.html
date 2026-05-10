@@ -1,0 +1,2568 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#070809">
+  <title>СИБКАРТ Telemetry Prototype</title>
+  <style>
+    :root {
+      --bg: #070809;
+      --bg-2: #0d0f12;
+      --surface: #161a20;
+      --surface-2: #1b2027;
+      --surface-3: #10141a;
+      --text: #f4f7fb;
+      --muted: #a7b0be;
+      --muted-2: #7d8795;
+      --line: rgba(255, 255, 255, 0.08);
+      --line-strong: rgba(255, 255, 255, 0.14);
+      --brand: #8b5cf6;
+      --brand-2: #d946ef;
+      --cyan: #38e8ff;
+      --green: #22c55e;
+      --orange: #f59e0b;
+      --red: #ef4444;
+      --shadow: 0 18px 40px rgba(0, 0, 0, 0.34);
+      --shadow-soft: 0 12px 28px rgba(0, 0, 0, 0.24);
+      --radius: 18px;
+      --radius-sm: 10px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(circle at top, rgba(139, 92, 246, 0.2), transparent 32%),
+        radial-gradient(circle at bottom right, rgba(56, 232, 255, 0.09), transparent 24%),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      padding: 28px;
+      overflow-x: hidden;
+    }
+
+    body.telegram-mode {
+      padding: 0;
+      background: var(--bg);
+    }
+
+    .prototype-shell {
+      display: grid;
+      grid-template-columns: minmax(320px, 420px) minmax(320px, 1fr);
+      gap: 28px;
+      align-items: start;
+      width: min(1380px, 100%);
+      margin: 0 auto;
+    }
+
+    body.telegram-mode .prototype-shell {
+      display: block;
+      width: 100%;
+      max-width: none;
+      margin: 0;
+    }
+
+    .phone-stage {
+      position: sticky;
+      top: 28px;
+    }
+
+    body.telegram-mode .phone-stage {
+      position: static;
+    }
+
+    .device-frame {
+      position: relative;
+      width: min(100%, 393px);
+      margin: 0 auto;
+      padding: 12px;
+      border-radius: 34px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04)),
+        #080a0c;
+      border: 1px solid rgba(255,255,255,0.12);
+      box-shadow: var(--shadow);
+      transition: transform 0.28s ease, box-shadow 0.28s ease;
+    }
+
+    body.telegram-mode .device-frame {
+      width: 100%;
+      max-width: none;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: none;
+      box-shadow: none;
+    }
+
+    .device-frame::before {
+      content: "";
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      width: 32%;
+      height: 24px;
+      transform: translateX(-50%);
+      border-radius: 0 0 18px 18px;
+      background: rgba(0,0,0,0.82);
+      z-index: 3;
+    }
+
+    body.telegram-mode .device-frame::before {
+      display: none;
+    }
+
+    .device-screen {
+      position: relative;
+      height: min(852px, calc(100vh - 80px));
+      min-height: 720px;
+      overflow: hidden;
+      overscroll-behavior: contain;
+      border-radius: 26px;
+      background:
+        linear-gradient(180deg, rgba(139,92,246,0.08), transparent 26%),
+        var(--bg);
+      border: 1px solid rgba(255,255,255,0.06);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+
+    body.telegram-mode .device-screen {
+      height: var(--tg-viewport-height, 100vh);
+      min-height: var(--tg-viewport-stable-height, 100vh);
+      border-radius: 0;
+      border: 0;
+      box-shadow: none;
+    }
+
+    .device-screen::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 30% 18%, rgba(139,92,246,0.26), transparent 28%),
+        linear-gradient(135deg, rgba(56,232,255,0.08), transparent 42%, rgba(217,70,239,0.1));
+      mix-blend-mode: screen;
+    }
+
+    .device-screen.is-transitioning::after {
+      animation: routeSweep 0.42s ease;
+    }
+
+    .screen-scroll {
+      height: 100%;
+      overflow: auto;
+      overscroll-behavior-y: contain;
+      -webkit-overflow-scrolling: touch;
+      scroll-behavior: smooth;
+      scrollbar-width: none;
+    }
+
+    .screen-scroll::-webkit-scrollbar {
+      display: none;
+    }
+
+    .screen {
+      display: none;
+      min-height: 100%;
+      padding: 18px 18px 92px;
+      isolation: isolate;
+    }
+
+    body.telegram-mode .screen {
+      padding-top: calc(18px + var(--tg-content-safe-area-inset-top, 0px));
+      padding-right: calc(18px + var(--tg-content-safe-area-inset-right, 0px));
+      padding-bottom: calc(92px + var(--tg-content-safe-area-inset-bottom, 0px));
+      padding-left: calc(18px + var(--tg-content-safe-area-inset-left, 0px));
+    }
+
+    .screen.active {
+      display: block;
+      animation: screenFade 0.34s ease;
+    }
+
+    .screen.active > * {
+      animation: riseIn 0.42s cubic-bezier(.22,1,.36,1) both;
+    }
+
+    .screen.active > *:nth-child(2) { animation-delay: 0.03s; }
+    .screen.active > *:nth-child(3) { animation-delay: 0.06s; }
+    .screen.active > *:nth-child(4) { animation-delay: 0.09s; }
+    .screen.active > *:nth-child(5) { animation-delay: 0.12s; }
+    .screen.active > *:nth-child(6) { animation-delay: 0.15s; }
+
+    @keyframes riseIn {
+      from { opacity: 0; transform: translateY(12px) scale(0.985); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    @keyframes screenFade {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .topbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .topbar > div:first-child {
+      min-width: 0;
+    }
+
+    .topbar h1,
+    .topbar h2,
+    .topbar h3,
+    .screen-title {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    .topbar-meta,
+    .screen-subtitle,
+    .muted {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+
+    .icon-btn,
+    .chip,
+    .btn,
+    .quick-jump {
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .icon-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 42px;
+      height: 42px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--text);
+      transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .pill-row,
+    .chip-row,
+    .btn-row,
+    .quick-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--line);
+    }
+
+    .pill.live {
+      color: var(--cyan);
+      border-color: rgba(56,232,255,0.28);
+      background: rgba(56,232,255,0.12);
+      animation: pulseSoft 2.2s ease-in-out infinite;
+    }
+
+    .pill.success {
+      color: var(--green);
+      border-color: rgba(34,197,94,0.24);
+      background: rgba(34,197,94,0.12);
+    }
+
+    .pill.warning {
+      color: var(--orange);
+      border-color: rgba(245,158,11,0.24);
+      background: rgba(245,158,11,0.12);
+    }
+
+    .pill.brand {
+      color: #dac8ff;
+      border-color: rgba(139,92,246,0.3);
+      background: rgba(139,92,246,0.14);
+    }
+
+    .card {
+      margin-top: 14px;
+      padding: 16px;
+      border-radius: var(--radius);
+      border: 1px solid var(--line-strong);
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)), var(--surface);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+      transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease, background 0.22s ease;
+    }
+
+    .card.hero {
+      background:
+        linear-gradient(145deg, rgba(139,92,246,0.22), rgba(217,70,239,0.08)),
+        linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)),
+        var(--surface);
+      border-color: rgba(139,92,246,0.26);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 0 0 1px rgba(139,92,246,0.04), 0 24px 46px rgba(84, 36, 166, 0.16);
+    }
+
+    .card-title {
+      margin: 0 0 10px;
+      font-size: 16px;
+      line-height: 1.3;
+    }
+
+    .hero-value {
+      margin: 6px 0;
+      font-size: 44px;
+      font-weight: 800;
+      line-height: 0.95;
+    }
+
+    .hero-delta {
+      color: var(--cyan);
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .btn-row {
+      margin-top: 16px;
+    }
+
+    .btn-row .btn {
+      flex: 1 1 calc(50% - 4px);
+      min-width: 0;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 48px;
+      padding: 0 16px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--surface);
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 700;
+      transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+    }
+
+    .btn:hover,
+    .quick-jump:hover,
+    .chip:hover,
+    .icon-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-soft);
+    }
+
+    .btn.primary {
+      border: 0;
+      background: linear-gradient(135deg, var(--brand), var(--brand-2));
+      color: #fff;
+      box-shadow: 0 14px 28px rgba(139, 92, 246, 0.28);
+    }
+
+    .btn.full {
+      width: 100%;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .metric {
+      padding: 14px;
+      min-height: 106px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--surface-3);
+      transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease, background 0.22s ease;
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .metric-value {
+      display: block;
+      margin-top: 12px;
+      font-size: 28px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .metric-unit {
+      color: var(--cyan);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .hero-metrics {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .mini-stat {
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(0,0,0,0.18);
+      transition: transform 0.22s ease, border-color 0.22s ease, background 0.22s ease;
+    }
+
+    .mini-stat strong {
+      display: block;
+      margin-top: 8px;
+      font-size: 20px;
+    }
+
+    .track-map,
+    .chart-block {
+      margin-top: 12px;
+      padding: 14px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--surface-3);
+      transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+    }
+
+    .track-map {
+      overflow: hidden;
+    }
+
+    .telemetry-stack {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .telemetry-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .telemetry-legend strong {
+      color: var(--text);
+      font-size: 12px;
+    }
+
+    .telemetry-legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .telemetry-legend-item::before {
+      content: "";
+      width: 12px;
+      height: 2px;
+      border-radius: 999px;
+      background: currentColor;
+      box-shadow: 0 0 8px currentColor;
+    }
+
+    .telemetry-legend-item.speed {
+      color: var(--cyan);
+    }
+
+    .telemetry-legend-item.rpm {
+      color: #d946ef;
+    }
+
+    .telemetry-grid {
+      stroke: rgba(255,255,255,0.07);
+      stroke-width: 1;
+    }
+
+    .telemetry-line {
+      fill: none;
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .telemetry-line.speed {
+      stroke: var(--cyan);
+      filter: drop-shadow(0 0 10px rgba(56,232,255,0.36));
+    }
+
+    .telemetry-line.rpm {
+      stroke: rgba(217,70,239,0.95);
+      filter: drop-shadow(0 0 10px rgba(217,70,239,0.28));
+    }
+
+    .telemetry-area {
+      fill: rgba(56,232,255,0.08);
+    }
+
+    .sector-bars {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .sector-bar {
+      display: grid;
+      gap: 6px;
+    }
+
+    .sector-rail {
+      height: 8px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+    }
+
+    .sector-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, rgba(139,92,246,0.95), rgba(56,232,255,0.9));
+      box-shadow: 0 0 10px rgba(56,232,255,0.18);
+      transform-origin: left center;
+      animation: fillBar 0.9s cubic-bezier(.22,1,.36,1);
+    }
+
+    .track-map svg,
+    .chart-block svg {
+      width: 100%;
+      height: auto;
+      display: block;
+      overflow: visible;
+    }
+
+    .track-road {
+      fill: none;
+      stroke: rgba(255,255,255,0.09);
+      stroke-width: 22;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .chart-line {
+      fill: none;
+      stroke: var(--cyan);
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      filter: drop-shadow(0 0 10px rgba(56,232,255,0.38));
+      animation: chartGlow 2.8s ease-in-out infinite;
+    }
+
+    .chart-line.secondary {
+      stroke: rgba(217,70,239,0.9);
+      filter: drop-shadow(0 0 12px rgba(217,70,239,0.34));
+      animation-delay: 0.35s;
+    }
+
+    .track-line {
+      fill: none;
+      stroke: var(--cyan);
+      stroke-width: 4.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      filter: drop-shadow(0 0 10px rgba(56,232,255,0.2));
+    }
+
+    .track-lane {
+      fill: none;
+      stroke: rgba(255,255,255,0.22);
+      stroke-width: 1.5;
+      stroke-dasharray: 7 8;
+      stroke-linecap: round;
+    }
+
+    .track-sector {
+      stroke: rgba(217,70,239,0.75);
+      stroke-width: 2;
+      stroke-linecap: round;
+    }
+
+    .track-sector-label {
+      fill: #dac8ff;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .track-start {
+      stroke: #ffffff;
+      stroke-width: 3;
+      stroke-linecap: round;
+    }
+
+    .track-start-label {
+      fill: #ffffff;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .track-dot {
+      fill: #fff;
+      stroke: var(--cyan);
+      stroke-width: 4;
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: dotPulse 1.8s ease-in-out infinite;
+    }
+
+    .recommendation {
+      border-color: rgba(139,92,246,0.26);
+      background:
+        linear-gradient(180deg, rgba(139,92,246,0.12), rgba(139,92,246,0.04)),
+        var(--surface);
+    }
+
+    .recommendation-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .ai-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 38px;
+      min-height: 38px;
+      padding: 0 10px;
+      border-radius: 10px;
+      background: rgba(139,92,246,0.18);
+      color: #dac8ff;
+      font-weight: 800;
+      font-size: 12px;
+      box-shadow: 0 0 0 1px rgba(139,92,246,0.08), 0 10px 22px rgba(110, 52, 199, 0.18);
+    }
+
+    .list {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .list-item {
+      padding: 14px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--surface-3);
+      cursor: pointer;
+      transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease, background 0.22s ease;
+    }
+
+    .list-item strong {
+      display: block;
+      font-size: 14px;
+    }
+
+    .list-item span {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface-3);
+      color: var(--muted);
+      transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .chip.active {
+      color: var(--text);
+      border-color: rgba(139,92,246,0.26);
+      background: rgba(139,92,246,0.18);
+    }
+
+    .device-nav {
+      position: absolute;
+      right: 18px;
+      bottom: 18px;
+      left: 18px;
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      padding: 10px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(13,15,18,0.92);
+      backdrop-filter: blur(12px);
+      z-index: 3;
+    }
+
+    body.telegram-mode .device-nav {
+      left: calc(18px + var(--tg-content-safe-area-inset-left, 0px));
+      right: calc(18px + var(--tg-content-safe-area-inset-right, 0px));
+      bottom: calc(18px + var(--tg-content-safe-area-inset-bottom, 0px));
+    }
+
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      min-height: 52px;
+      border-radius: 12px;
+      border: 0;
+      background: transparent;
+      color: var(--muted-2);
+      font-size: 11px;
+      font-weight: 700;
+      transition: transform 0.18s ease, color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .nav-item.active {
+      color: var(--text);
+      background: rgba(139,92,246,0.18);
+      box-shadow: 0 10px 24px rgba(84, 36, 166, 0.18);
+    }
+
+    .nav-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: currentColor;
+      opacity: 0.9;
+    }
+
+    .side-panel {
+      display: grid;
+      gap: 16px;
+    }
+
+    body.telegram-mode .side-panel {
+      display: none;
+    }
+
+    .panel {
+      padding: 18px;
+      border-radius: 20px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)), rgba(10, 12, 15, 0.88);
+      box-shadow: var(--shadow);
+      transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+    }
+
+    .panel h2,
+    .panel h3 {
+      margin: 0 0 10px;
+      font-size: 18px;
+    }
+
+    .panel p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .quick-grid {
+      margin-top: 14px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .quick-jump {
+      min-height: 48px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--text);
+      text-align: left;
+      font-weight: 700;
+      transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .status-card {
+      padding: 14px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: var(--surface-3);
+      transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+    }
+
+    .status-card span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .status-card strong {
+      display: block;
+      margin-top: 10px;
+      font-size: 18px;
+    }
+
+    .log-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+      max-height: 280px;
+      overflow: auto;
+      scrollbar-width: thin;
+    }
+
+    .log-item {
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--surface-3);
+      animation: riseIn 0.36s ease both;
+    }
+
+    .log-item time {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--muted-2);
+      font-size: 11px;
+    }
+
+    .split-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .split-row strong {
+      color: var(--text);
+    }
+
+    .score {
+      font-size: 46px;
+      font-weight: 800;
+      line-height: 0.95;
+      margin: 8px 0 6px;
+    }
+
+    .timeline {
+      margin-top: 14px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .timeline-step {
+      position: relative;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .timeline-step::before {
+      content: "";
+      position: absolute;
+      top: 7px;
+      left: 0;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 12px rgba(56,232,255,0.48);
+    }
+
+    .login-stage {
+      min-height: 100%;
+      padding-top: min(48px, 7vh);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .login-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 22px;
+    }
+
+    .brand-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: rgba(139,92,246,0.18);
+      color: #dac8ff;
+      font-weight: 800;
+      box-shadow: 0 0 0 1px rgba(139,92,246,0.08), 0 14px 28px rgba(84, 36, 166, 0.18);
+      animation: badgeFloat 3.8s ease-in-out infinite;
+    }
+
+    .login-graphic {
+      margin-top: 18px;
+      overflow: hidden;
+      border-radius: 22px;
+      border: 1px solid rgba(139,92,246,0.18);
+      background:
+        linear-gradient(180deg, rgba(139,92,246,0.2), rgba(139,92,246,0.04)),
+        var(--surface);
+    }
+
+    .login-graphic img {
+      width: 100%;
+      display: block;
+      opacity: 0.7;
+      mix-blend-mode: screen;
+      filter: saturate(1.08);
+      animation: floatGraphic 8s ease-in-out infinite;
+    }
+
+    .progress-bar {
+      height: 8px;
+      margin-top: 12px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+    }
+
+    .progress-bar span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--brand), var(--cyan));
+      animation: fillBar 1.2s cubic-bezier(.22,1,.36,1), chartGlow 2.8s ease-in-out infinite;
+      transform-origin: left center;
+    }
+
+    .card:hover,
+    .metric:hover,
+    .mini-stat:hover,
+    .track-map:hover,
+    .chart-block:hover,
+    .status-card:hover,
+    .list-item:hover,
+    .panel:hover,
+    .card[data-route]:hover {
+      transform: translateY(-2px);
+      border-color: rgba(139,92,246,0.22);
+      box-shadow: var(--shadow-soft);
+    }
+
+    .nav-item:hover {
+      transform: translateY(-1px);
+      color: var(--text);
+    }
+
+    @keyframes pulseSoft {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(56,232,255,0.08); }
+      50% { box-shadow: 0 0 0 8px rgba(56,232,255,0.02); }
+    }
+
+    @keyframes chartGlow {
+      0%, 100% { opacity: 0.84; }
+      50% { opacity: 1; }
+    }
+
+    @keyframes dotPulse {
+      0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(56,232,255,0.12)); }
+      50% { transform: scale(1.12); filter: drop-shadow(0 0 10px rgba(56,232,255,0.42)); }
+    }
+
+    @keyframes badgeFloat {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-3px); }
+    }
+
+    @keyframes floatGraphic {
+      0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+      50% { transform: translate3d(0, -6px, 0) scale(1.015); }
+    }
+
+    @keyframes fillBar {
+      from { transform: scaleX(0.2); opacity: 0.55; }
+      to { transform: scaleX(1); opacity: 1; }
+    }
+
+    @keyframes routeSweep {
+      0% { opacity: 0; transform: translateX(-10%) scale(1.02); }
+      30% { opacity: 0.65; }
+      100% { opacity: 0; transform: translateX(6%) scale(1); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation: none !important;
+        transition: none !important;
+        scroll-behavior: auto !important;
+      }
+    }
+
+    @media (max-width: 1120px) {
+      .prototype-shell {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .phone-stage {
+        position: static;
+      }
+
+      .device-screen {
+        height: auto;
+        min-height: 780px;
+      }
+    }
+
+    @media (max-width: 520px) {
+      body {
+        padding: 12px;
+      }
+
+      .prototype-shell {
+        gap: 16px;
+      }
+
+      .device-frame {
+        padding: 10px;
+        border-radius: 26px;
+      }
+
+      .device-screen {
+        min-height: 720px;
+      }
+
+      .hero-value,
+      .score {
+        font-size: 38px;
+      }
+
+      .topbar {
+        gap: 10px;
+      }
+
+      .topbar h1,
+      .topbar h2,
+      .topbar h3,
+      .screen-title {
+        font-size: 22px;
+      }
+
+      .grid-2,
+      .hero-metrics {
+        grid-template-columns: 1fr;
+      }
+
+      .btn-row .btn {
+        flex-basis: 100%;
+        width: 100%;
+      }
+
+      .split-row {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 4px;
+      }
+
+      .split-row strong,
+      .split-row span {
+        text-align: left;
+      }
+
+      .quick-grid,
+      .status-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .device-nav {
+        gap: 6px;
+        padding: 8px;
+      }
+
+      .nav-item {
+        min-height: 50px;
+        font-size: 10px;
+      }
+    }
+
+    .overlay-root {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 20;
+    }
+
+    .overlay-root.active {
+      pointer-events: auto;
+    }
+
+    .overlay-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(3, 5, 9, 0.76);
+      backdrop-filter: blur(10px);
+    }
+
+    .notify-sheet {
+      position: absolute;
+      right: 20px;
+      top: 20px;
+      width: min(340px, calc(100vw - 40px));
+      background: rgba(16, 20, 28, 0.96);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.42);
+      padding: 18px;
+    }
+
+    .notify-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .notify-item {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
+      padding: 12px;
+    }
+
+    .notify-item strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 14px;
+    }
+
+    .notify-item span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <main class="prototype-shell">
+    <section class="phone-stage">
+      <div class="device-frame">
+        <div class="device-screen">
+          <div class="screen-scroll">
+            <section class="screen" data-screen="launch"></section>
+            <section class="screen active" data-screen="login"></section>
+            <section class="screen" data-screen="home"></section>
+            <section class="screen" data-screen="live"></section>
+            <section class="screen" data-screen="complete"></section>
+            <section class="screen" data-screen="compare"></section>
+            <section class="screen" data-screen="analysis"></section>
+            <section class="screen" data-screen="history"></section>
+            <section class="screen" data-screen="profile"></section>
+            <section class="screen" data-screen="kart"></section>
+            <section class="screen" data-screen="coach"></section>
+          </div>
+          <nav class="device-nav" aria-label="Навигация приложения"></nav>
+        </div>
+      </div>
+    </section>
+
+    <aside class="side-panel">
+      <section class="panel">
+        <h2>СИБКАРТ Telemetry Demo</h2>
+        <p>Это HTML-прототип мобильного приложения с рабочими переходами, имитацией live-данных и основными сценариями: вход, заезд, итог, сравнение кругов, AI-анализ, история и профиль.</p>
+        <div class="quick-grid" id="quickJumps"></div>
+      </section>
+
+      <section class="panel">
+        <h3>Текущее состояние</h3>
+        <div class="status-grid">
+          <div class="status-card">
+            <span>Экран</span>
+            <strong id="statusScreen">Login</strong>
+          </div>
+          <div class="status-card">
+            <span>Пилот</span>
+            <strong id="statusPilot">Максим</strong>
+          </div>
+          <div class="status-card">
+            <span>Лучший круг</span>
+            <strong id="statusBestLap">48.372</strong>
+          </div>
+          <div class="status-card">
+            <span>Сессия</span>
+            <strong id="statusSession">Не запущена</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h3>Главный demo-flow</h3>
+        <div class="timeline">
+          <div class="timeline-step">Login -> Home Dashboard</div>
+          <div class="timeline-step">Start Session -> Live Telemetry</div>
+          <div class="timeline-step">Complete Session -> Session Summary</div>
+          <div class="timeline-step">Lap Compare -> AI Analysis</div>
+          <div class="timeline-step">History, Profile, Kart Status</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h3>События прототипа</h3>
+        <div class="log-list" id="eventLog"></div>
+      </section>
+    </aside>
+  </main>
+  <div class="overlay-root" id="overlayRoot" aria-live="polite"></div>
+
+  <script src="https://telegram.org/js/telegram-web-app.js?62"></script>
+  <script>
+    const appState = {
+      currentScreen: "login",
+      pilot: "Максим Цеханович",
+      track: "Tomsk Ring",
+      bestLap: 48.372,
+      avgLap: 49.104,
+      rating: 87,
+      sessionActive: false,
+      livePaused: false,
+      liveTick: 0,
+      selectedSessionId: "s1",
+      historyFilter: "all",
+      compareFocus: "a",
+      compareTrack: "tomsk",
+      notificationsOpen: false,
+      routeStack: ["login"],
+      telegram: {
+        isMiniApp: false,
+        platform: "web",
+        version: "",
+        userName: ""
+      },
+      live: {
+        speed: 78,
+        lap: 31.842,
+        delta: 0.214,
+        rpm: 11240,
+        temp: 92,
+        g: 1.42,
+        steer: 18,
+        throttle: 72
+      },
+      history: [
+        {
+          id: "s1",
+          date: "06 мая",
+          track: "Tomsk Ring",
+          best: 48.372,
+          avg: 49.104,
+          delta: "-0.84 сек",
+          laps: 14,
+          stability: 84,
+          sectors: ["15.221", "17.438", "15.713"],
+          sectorDelta: ["-0.08", "+0.14", "-0.03"],
+          aiTitle: "Стиль вождения агрессивный",
+          aiGain: "-0.61 сек",
+          aiText: "Наибольшая потеря времени возникает при позднем торможении и резком входе в поворот 5. Лучший прогресс — на выходе из медленных связок."
+        },
+        {
+          id: "s2",
+          date: "04 мая",
+          track: "Indoor Track",
+          best: 49.118,
+          avg: 49.536,
+          delta: "+0.22 сек",
+          laps: 11,
+          stability: 79,
+          sectors: ["15.704", "17.812", "15.602"],
+          sectorDelta: ["+0.03", "+0.28", "-0.09"],
+          aiTitle: "Темп проседает после 7 минуты",
+          aiGain: "-0.38 сек",
+          aiText: "На закрытой трассе скорость входа стабилизировалась, но после длинной связки появляется пауза перед открытием газа и теряется выход на прямую."
+        },
+        {
+          id: "s3",
+          date: "02 мая",
+          track: "Tomsk Ring",
+          best: 48.941,
+          avg: 49.280,
+          delta: "-0.11 сек",
+          laps: 13,
+          stability: 82,
+          sectors: ["15.356", "17.590", "15.995"],
+          sectorDelta: ["-0.02", "+0.11", "+0.07"],
+          aiTitle: "Хороший темп, но нестабильный третий сектор",
+          aiGain: "-0.29 сек",
+          aiText: "Пилот собирает первые два сектора уверенно, но в последней связке траектория расширяется, и карт позже открывает газ на выходе."
+        }
+      ],
+      compareData: {
+        tomsk: {
+          title: "Круг 06 vs Круг 11",
+          lapA: "48.372",
+          lapB: "49.011",
+          delta: "-0.639 сек",
+          sectors: [
+            { name: "Сектор 1", values: "15.221 / 15.401", delta: "-0.180", tone: "green" },
+            { name: "Сектор 2", values: "17.438 / 17.112", delta: "+0.326", tone: "orange" },
+            { name: "Сектор 3", values: "15.713 / 16.498", delta: "-0.785", tone: "green" }
+          ],
+          focusText: {
+            a: {
+              title: "Опорный круг собран чище",
+              subtitle: "Ключевая разница в секторе 3",
+              body: "В круге 06 пилот раньше открывает газ после апекса и быстрее выравнивает карт перед прямой."
+            },
+            b: {
+              title: "Потеря времени после апекса",
+              subtitle: "Ключевая разница в секторе 3",
+              body: "В круге 11 поздно открывается газ на выходе из поворота, поэтому машина проигрывает на разгоне до прямой."
+            }
+          }
+        },
+        indoor: {
+          title: "Круг 03 vs Круг 08",
+          lapA: "49.118",
+          lapB: "49.562",
+          delta: "-0.444 сек",
+          sectors: [
+            { name: "Сектор 1", values: "15.704 / 15.936", delta: "-0.232", tone: "green" },
+            { name: "Сектор 2", values: "17.812 / 17.654", delta: "+0.158", tone: "orange" },
+            { name: "Сектор 3", values: "15.602 / 15.972", delta: "-0.370", tone: "green" }
+          ],
+          focusText: {
+            a: {
+              title: "Стабильнее темп на узкой связке",
+              subtitle: "Indoor Track · разница на смене направления",
+              body: "Круг 03 выигрывает за счет более ровной перекладки и раннего возврата на газ после связки."
+            },
+            b: {
+              title: "Лишнее руление в центре трассы",
+              subtitle: "Indoor Track · потери во втором секторе",
+              body: "Круг 08 собирается хуже из-за лишнего доворота руля в средней фазе поворота, поэтому карт позже разгоняется."
+            }
+          }
+        }
+      },
+      notifications: [
+        { title: "Сенсор температуры стабилен", text: "Последние 3 минуты двигатель держится в коридоре 91-93°C." },
+        { title: "AI нашел окно улучшения", text: "В секторе 2 доступно до -0.18 сек при более раннем торможении." },
+        { title: "История обновлена", text: "Последняя сессия сохранена в архив и готова к сравнению." }
+      ],
+      coach: {
+        teamName: "SIBKART Racing",
+        activeKarts: 3,
+        connectedPilots: 4,
+        bestTeamLap: 47.982,
+        pilots: [
+          { name: "Максим Цеханович", status: "На трассе", delta: "-0.28 сек", trend: "green", focus: "Сектор 2" },
+          { name: "Артем Бойко", status: "Анализ сессии", delta: "+0.12 сек", trend: "orange", focus: "Выход из поворота 5" },
+          { name: "Илья Сергеев", status: "Ожидает заезд", delta: "-0.04 сек", trend: "green", focus: "Разгон после апекса" }
+        ],
+        coachAlerts: [
+          "У Максима окно улучшения -0.18 сек на торможении перед сектором 2.",
+          "Карт №12 стабилен, но после 10 минуты нужен контроль температуры.",
+          "Артему стоит сравнить последние два круга перед следующим заездом."
+        ]
+      },
+      log: []
+    };
+
+    const screenTitles = {
+      launch: "Telegram Launch",
+      login: "Login",
+      home: "Home Dashboard",
+      live: "Live Session",
+      complete: "Session Complete",
+      compare: "Lap Compare",
+      analysis: "AI Analysis",
+      history: "Session History",
+      profile: "Driver Profile",
+      kart: "Kart Status",
+      coach: "Coach View"
+    };
+
+    const navItems = [
+      { id: "home", label: "Главная" },
+      { id: "live", label: "Заезд" },
+      { id: "analysis", label: "Анализ" },
+      { id: "history", label: "История" },
+      { id: "profile", label: "Профиль" }
+    ];
+
+    const jumpItems = [
+      ["launch", "Launch"],
+      ["login", "Login"],
+      ["home", "Home"],
+      ["live", "Live"],
+      ["complete", "Complete"],
+      ["compare", "Compare"],
+      ["analysis", "AI"],
+      ["history", "History"],
+      ["profile", "Profile"],
+      ["kart", "Kart"],
+      ["coach", "Coach"]
+    ];
+
+    const screenNodes = [...document.querySelectorAll(".screen")];
+    const navNode = document.querySelector(".device-nav");
+    const logNode = document.getElementById("eventLog");
+    const quickNode = document.getElementById("quickJumps");
+    const overlayNode = document.getElementById("overlayRoot");
+    const deviceScreenNode = document.querySelector(".device-screen");
+
+    let liveInterval = null;
+    let transitionTimer = null;
+
+    function formatLap(value) {
+      return value.toFixed(3);
+    }
+
+    function normalizeHex(value, fallback) {
+      if (typeof value !== "string") return fallback;
+      const color = value.trim();
+      if (/^#[0-9a-fA-F]{6}$/.test(color)) return color;
+      if (/^#[0-9a-fA-F]{3}$/.test(color)) {
+        return `#${color[1]}${color[1]}${color[2]}${color[2]}${color[3]}${color[3]}`;
+      }
+      return fallback;
+    }
+
+    function hexToRgb(hex) {
+      const color = normalizeHex(hex, "#000000");
+      return {
+        r: parseInt(color.slice(1, 3), 16),
+        g: parseInt(color.slice(3, 5), 16),
+        b: parseInt(color.slice(5, 7), 16)
+      };
+    }
+
+    function mixHex(first, second, ratio) {
+      const a = hexToRgb(first);
+      const b = hexToRgb(second);
+      const mix = (start, end) => Math.round(start + (end - start) * ratio);
+      return `#${[mix(a.r, b.r), mix(a.g, b.g), mix(a.b, b.b)].map(value => value.toString(16).padStart(2, "0")).join("")}`;
+    }
+
+    function hexToRgba(hex, alpha) {
+      const { r, g, b } = hexToRgb(hex);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    function getTelegramWebApp() {
+      return window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+    }
+
+    function applyTelegramTheme(tg) {
+      const theme = tg.themeParams || {};
+      const scheme = tg.colorScheme || "dark";
+      const bg = normalizeHex(theme.bg_color, "#070809");
+      const text = normalizeHex(theme.text_color, "#f4f7fb");
+      const hint = normalizeHex(theme.hint_color || theme.subtitle_text_color, "#a7b0be");
+      const button = normalizeHex(theme.button_color, "#8b5cf6");
+      const accent = normalizeHex(theme.accent_text_color || theme.link_color, "#38e8ff");
+      const secondaryBase = normalizeHex(theme.secondary_bg_color || theme.section_bg_color, scheme === "light" ? mixHex(bg, "#000000", 0.08) : mixHex(bg, "#ffffff", 0.08));
+      const surface = scheme === "light" ? mixHex(bg, "#000000", 0.06) : mixHex(bg, "#ffffff", 0.07);
+      const surfaceStrong = scheme === "light" ? mixHex(bg, "#000000", 0.1) : mixHex(bg, "#ffffff", 0.1);
+
+      const root = document.documentElement;
+      root.style.setProperty("--bg", bg);
+      root.style.setProperty("--bg-2", secondaryBase);
+      root.style.setProperty("--surface", surface);
+      root.style.setProperty("--surface-2", surfaceStrong);
+      root.style.setProperty("--surface-3", secondaryBase);
+      root.style.setProperty("--text", text);
+      root.style.setProperty("--muted", hint);
+      root.style.setProperty("--muted-2", hexToRgba(text, 0.66));
+      root.style.setProperty("--brand", button);
+      root.style.setProperty("--brand-2", mixHex(button, scheme === "light" ? "#000000" : "#ffffff", scheme === "light" ? 0.08 : 0.2));
+      root.style.setProperty("--cyan", accent);
+      root.style.setProperty("--line", hexToRgba(text, 0.08));
+      root.style.setProperty("--line-strong", hexToRgba(text, 0.14));
+
+      const themeMeta = document.querySelector('meta[name="theme-color"]');
+      if (themeMeta) themeMeta.setAttribute("content", bg);
+
+      if (typeof tg.setHeaderColor === "function") {
+        tg.setHeaderColor(normalizeHex(theme.header_bg_color, bg));
+      }
+      if (typeof tg.setBackgroundColor === "function") {
+        tg.setBackgroundColor(bg);
+      }
+      if (typeof tg.setBottomBarColor === "function") {
+        tg.setBottomBarColor(normalizeHex(theme.bottom_bar_bg_color, secondaryBase));
+      }
+    }
+
+    function handleTelegramBack() {
+      if (appState.routeStack.length > 1) {
+        appState.routeStack.pop();
+        const previous = appState.routeStack[appState.routeStack.length - 1] || "home";
+        activateScreen(previous, { skipStack: true });
+        logEvent(`Возврат на экран ${screenTitles[previous] || previous}`);
+      } else {
+        const tg = getTelegramWebApp();
+        if (tg && typeof tg.close === "function") {
+          tg.close();
+        }
+      }
+    }
+
+    function syncTelegramChrome() {
+      const tg = getTelegramWebApp();
+      if (!tg || !appState.telegram.isMiniApp) return;
+      const shouldShowBack = !["launch", "login", "home"].includes(appState.currentScreen);
+      if (tg.BackButton) {
+        if (shouldShowBack) {
+          tg.BackButton.show();
+        } else {
+          tg.BackButton.hide();
+        }
+      }
+    }
+
+    function initTelegramMiniApp() {
+      const tg = getTelegramWebApp();
+      if (!tg) return;
+
+      appState.telegram.isMiniApp = true;
+      appState.telegram.platform = tg.platform || "telegram";
+      appState.telegram.version = tg.version || "";
+      document.body.classList.add("telegram-mode");
+
+      const telegramUser = tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user : null;
+      if (telegramUser) {
+        const fullName = [telegramUser.first_name, telegramUser.last_name].filter(Boolean).join(" ").trim();
+        if (fullName) {
+          appState.pilot = fullName;
+          appState.telegram.userName = fullName;
+        }
+      }
+
+      applyTelegramTheme(tg);
+
+      if (typeof tg.ready === "function") {
+        tg.ready();
+      }
+      if (typeof tg.expand === "function") {
+        tg.expand();
+      }
+      if (typeof tg.disableVerticalSwipes === "function") {
+        tg.disableVerticalSwipes();
+      }
+      if (typeof tg.requestFullscreen === "function" && typeof tg.isVersionAtLeast === "function" && tg.isVersionAtLeast("8.0")) {
+        tg.requestFullscreen();
+      }
+
+      if (typeof tg.onEvent === "function") {
+        tg.onEvent("themeChanged", () => applyTelegramTheme(tg));
+        tg.onEvent("backButtonClicked", handleTelegramBack);
+      }
+    }
+
+    function initTelegramLaunchMode() {
+      if (!isTelegramLaunchEntry()) return;
+      document.body.classList.add("telegram-mode", "demo-launch-mode");
+      const themeMeta = document.querySelector('meta[name="theme-color"]');
+      if (themeMeta) themeMeta.setAttribute("content", "#070809");
+      appState.currentScreen = "launch";
+      appState.routeStack = ["launch"];
+    }
+
+    function logEvent(text) {
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2, "0");
+      const mm = String(now.getMinutes()).padStart(2, "0");
+      appState.log.unshift({ time: `${hh}:${mm}`, text });
+      appState.log = appState.log.slice(0, 10);
+      renderSide();
+    }
+
+    function getSelectedSession() {
+      return appState.history.find(item => item.id === appState.selectedSessionId) || appState.history[0];
+    }
+
+    function getFilteredHistory() {
+      if (appState.historyFilter === "all" || appState.historyFilter === "month") {
+        return appState.history;
+      }
+
+      if (appState.historyFilter === "tomsk") {
+        return appState.history.filter(item => item.track === "Tomsk Ring");
+      }
+
+      return appState.history.filter(item => item.track === "Indoor Track");
+    }
+
+    function getCompareState() {
+      return appState.compareData[appState.compareTrack];
+    }
+
+    function isTelegramLaunchEntry() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get("entry") === "telegram" || window.location.pathname.endsWith("/telemetry-telegram.html") || window.location.pathname.endsWith("telemetry-telegram.html");
+    }
+
+    function playScreenTransition() {
+      clearTimeout(transitionTimer);
+      deviceScreenNode.classList.remove("is-transitioning");
+      void deviceScreenNode.offsetWidth;
+      deviceScreenNode.classList.add("is-transitioning");
+      transitionTimer = setTimeout(() => {
+        deviceScreenNode.classList.remove("is-transitioning");
+      }, 440);
+    }
+
+    function createSeries(length, baseline, amplitude, phase, frequency, drift = 0) {
+      return Array.from({ length }, (_, index) => {
+        const wave = Math.sin((index + phase) / frequency) * amplitude;
+        const harmonic = Math.cos((index + phase * 0.7) / (frequency * 0.58)) * amplitude * 0.28;
+        const bias = index * drift;
+        return baseline + wave + harmonic + bias;
+      });
+    }
+
+    function buildLinePath(values, min, max, width = 320, height = 120, pad = 10) {
+      if (!values.length) return "";
+      const usableWidth = width - pad * 2;
+      const usableHeight = height - pad * 2;
+      return values.map((value, index) => {
+        const x = pad + (index / (values.length - 1)) * usableWidth;
+        const ratio = (value - min) / (max - min || 1);
+        const y = height - pad - ratio * usableHeight;
+        return `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
+      }).join(" ");
+    }
+
+    function buildAreaPath(values, min, max, width = 320, height = 120, pad = 10) {
+      const line = buildLinePath(values, min, max, width, height, pad);
+      if (!line) return "";
+      const endX = width - pad;
+      const startX = pad;
+      const baseY = height - pad;
+      return `${line} L${endX} ${baseY} L${startX} ${baseY} Z`;
+    }
+
+    function getLiveTelemetryPaths() {
+      const speedValues = createSeries(18, 76, 7, appState.liveTick, 1.85, 0.08);
+      const rpmValues = createSeries(18, 11100, 520, appState.liveTick * 1.2, 1.45, 8);
+      return {
+        speedLine: buildLinePath(speedValues, 62, 92),
+        speedArea: buildAreaPath(speedValues, 62, 92),
+        rpmLine: buildLinePath(rpmValues, 10400, 12050)
+      };
+    }
+
+    function getLiveTrackProgress() {
+      return ((appState.liveTick * 0.037) + 0.08) % 1;
+    }
+
+    function getCompareTelemetryPaths() {
+      if (appState.compareTrack === "tomsk") {
+        return {
+          first: buildLinePath(createSeries(20, 74, 10, 2, 1.7, 0.12), 58, 92),
+          second: buildLinePath(createSeries(20, 72, 8, 5, 1.9, 0.08), 58, 92)
+        };
+      }
+
+      return {
+        first: buildLinePath(createSeries(20, 68, 7, 4, 1.55, 0.06), 54, 84),
+        second: buildLinePath(createSeries(20, 66, 6.2, 7, 1.75, 0.04), 54, 84)
+      };
+    }
+
+    function renderNav() {
+      navNode.innerHTML = navItems.map(item => `
+        <button class="nav-item ${appState.currentScreen === item.id ? "active" : ""}" data-route="${item.id}" type="button">
+          <span class="nav-dot" aria-hidden="true"></span>
+          <span>${item.label}</span>
+        </button>
+      `).join("");
+      navNode.style.display = ["launch", "login"].includes(appState.currentScreen) ? "none" : "grid";
+    }
+
+    function renderSide() {
+      document.getElementById("statusScreen").textContent = screenTitles[appState.currentScreen];
+      document.getElementById("statusPilot").textContent = appState.pilot.split(" ")[0];
+      document.getElementById("statusBestLap").textContent = formatLap(appState.bestLap);
+      document.getElementById("statusSession").textContent = appState.currentScreen === "live" && appState.livePaused
+        ? "На паузе"
+        : appState.sessionActive
+          ? "Идет заезд"
+          : "Не запущена";
+
+      logNode.innerHTML = appState.log.map(entry => `
+        <div class="log-item">
+          <time>${entry.time}</time>
+          <div>${entry.text}</div>
+        </div>
+      `).join("");
+
+      quickNode.innerHTML = jumpItems.map(([id, label]) => `
+        <button class="quick-jump" data-route="${id}" type="button">${label}</button>
+      `).join("");
+    }
+
+    function renderAllScreens() {
+      renderLaunch();
+      renderLogin();
+      renderHome();
+      renderLive();
+      renderComplete();
+      renderCompare();
+      renderAnalysis();
+      renderHistory();
+      renderProfile();
+      renderKart();
+      renderCoach();
+      renderOverlay();
+    }
+
+    function activateScreen(id, options = {}) {
+      appState.currentScreen = id;
+      if (options.replaceStack) {
+        appState.routeStack = [id];
+      } else if (!options.skipStack && appState.routeStack[appState.routeStack.length - 1] !== id) {
+        appState.routeStack.push(id);
+      }
+      playScreenTransition();
+      screenNodes.forEach(node => {
+        node.classList.toggle("active", node.dataset.screen === id);
+      });
+      const scrollHost = document.querySelector(".screen-scroll");
+      if (scrollHost) scrollHost.scrollTop = 0;
+      renderNav();
+      renderSide();
+      syncTelegramChrome();
+      manageLiveState();
+    }
+
+    function goTo(id, note) {
+      if (note) logEvent(note);
+      activateScreen(id);
+    }
+
+    function manageLiveState() {
+      clearInterval(liveInterval);
+      if (appState.currentScreen === "live") {
+        appState.sessionActive = !appState.livePaused;
+        updateLiveUI();
+        if (appState.livePaused) {
+          return;
+        }
+        liveInterval = setInterval(() => {
+          appState.liveTick += 1;
+          const wave = Math.sin(appState.liveTick / 2);
+          appState.live.speed = Math.round(78 + wave * 5);
+          appState.live.lap = 31.842 + Math.cos(appState.liveTick / 3) * 0.21;
+          appState.live.delta = 0.214 + Math.sin(appState.liveTick / 2.6) * 0.19;
+          appState.live.rpm = Math.round(11240 + Math.sin(appState.liveTick / 1.7) * 380);
+          appState.live.temp = Math.round(92 + Math.cos(appState.liveTick / 4) * 2);
+          appState.live.g = (1.42 + Math.sin(appState.liveTick / 2.4) * 0.08).toFixed(2);
+          appState.live.steer = Math.round(18 + Math.cos(appState.liveTick / 3.2) * 6);
+          appState.live.throttle = Math.round(72 + Math.sin(appState.liveTick / 2.8) * 10);
+          updateLiveUI();
+          renderSide();
+        }, 1200);
+      } else {
+        appState.sessionActive = false;
+      }
+    }
+
+    function renderOverlay() {
+      if (!appState.notificationsOpen) {
+        overlayNode.classList.remove("active");
+        overlayNode.innerHTML = "";
+        return;
+      }
+
+      overlayNode.classList.add("active");
+      overlayNode.innerHTML = `
+        <div class="overlay-backdrop" data-action="close-notifications"></div>
+        <section class="notify-sheet" aria-label="Центр уведомлений">
+          <div class="split-row">
+            <strong style="font-size:18px;color:var(--text);">Уведомления</strong>
+            <button class="icon-btn" type="button" data-action="close-notifications">✕</button>
+          </div>
+          <div class="notify-list">
+            ${appState.notifications.map(item => `
+              <article class="notify-item">
+                <strong>${item.title}</strong>
+                <span>${item.text}</span>
+              </article>
+            `).join("")}
+          </div>
+        </section>
+      `;
+    }
+
+    function topbar(title, subtitle, withLive = false) {
+      return `
+        <div class="topbar">
+          <div>
+            <h1 class="screen-title">${title}</h1>
+            <div class="topbar-meta">${subtitle}</div>
+          </div>
+          <div class="pill-row">
+            ${withLive ? '<span class="pill live">Live</span>' : ""}
+            <button class="icon-btn" type="button" data-action="notify">🔔</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderLaunch() {
+      const node = document.querySelector('[data-screen="launch"]');
+      node.innerHTML = `
+        <div class="login-stage">
+          <div class="login-brand">
+            <div class="brand-badge">SK</div>
+            <div>
+              <strong>СИБКАРТ</strong>
+              <div class="screen-subtitle">Telegram Mini App Demo</div>
+            </div>
+          </div>
+
+          <h1 class="screen-title">Телеметрия карта в Telegram</h1>
+          <p class="screen-subtitle" style="margin-top:10px;">Короткий демонстрационный вход: live-заезд, анализ кругов и командный центр прямо внутри Mini App.</p>
+
+          <div class="pill-row" style="margin-top:16px;">
+            <span class="pill live">Live telemetry</span>
+            <span class="pill brand">Telegram ready</span>
+            <span class="pill success">Coach view</span>
+          </div>
+
+          <div class="card hero" style="margin-top:20px;">
+            <div class="screen-subtitle">Demo-flow на 90 секунд</div>
+            <div class="timeline" style="margin-top:14px;">
+              <div class="timeline-step">Показ live-телеметрии и круговой трассы</div>
+              <div class="timeline-step">Итоги заезда и сравнение кругов</div>
+              <div class="timeline-step">AI-рекомендации и командный центр</div>
+            </div>
+            <div class="btn-row">
+              <button class="btn primary full" type="button" data-route="home">Открыть демо</button>
+              <button class="btn full" type="button" data-route="live">Сразу в live</button>
+              <button class="btn full" type="button" data-route="coach">Командный центр</button>
+            </div>
+          </div>
+
+          <section class="grid-2" style="margin-top:14px;">
+            <div class="metric">
+              <span class="metric-label">Формат</span>
+              <span class="metric-value">Mini</span>
+              <span class="metric-unit">App</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">Сценарий</span>
+              <span class="metric-value">6</span>
+              <span class="metric-unit">экранов</span>
+            </div>
+          </section>
+        </div>
+      `;
+    }
+
+    function renderLogin() {
+      const node = document.querySelector('[data-screen="login"]');
+      node.innerHTML = `
+        <div class="login-stage">
+          <div class="login-brand">
+            <div class="brand-badge">SK</div>
+            <div>
+              <strong>СИБКАРТ</strong>
+              <div class="screen-subtitle">Telemetry & AI Driving Analysis</div>
+            </div>
+          </div>
+
+          <h1 class="screen-title">Телеметрия и анализ вождения</h1>
+          <p class="screen-subtitle" style="margin-top:10px;">Контроль круга, live-метрики, сравнение сессий и рекомендации ИИ в одном приложении.</p>
+
+          <div class="pill-row" style="margin-top:16px;">
+            <span class="pill live">Live telemetry</span>
+            <span class="pill brand">AI analysis</span>
+            <span class="pill success">Driver progress</span>
+          </div>
+
+          <div class="card hero" style="margin-top:20px;">
+            <div class="screen-subtitle">Авторизация</div>
+            <div class="card" style="margin-top:14px;padding:14px;background:var(--surface-3);">
+              <div class="muted">Email или телефон</div>
+              <div style="margin-top:8px;">pilot@sibkart.ru</div>
+            </div>
+            <div class="card" style="margin-top:10px;padding:14px;background:var(--surface-3);">
+              <div class="muted">Пароль</div>
+              <div style="margin-top:8px;">••••••••</div>
+            </div>
+            <div class="btn-row">
+              <button class="btn primary full" type="button" data-route="home">Войти</button>
+              <button class="btn full" type="button" data-route="home">Демо-режим</button>
+            </div>
+          </div>
+
+        </div>
+      `;
+    }
+
+    function renderHome() {
+      const node = document.querySelector('[data-screen="home"]');
+      node.innerHTML = `
+        ${topbar("Главная", `${appState.track} · Пилот ${appState.pilot.split(" ")[0]}`)}
+        <section class="card hero">
+          <div class="screen-subtitle">Последняя сессия</div>
+          <div class="hero-value">${formatLap(appState.bestLap)}</div>
+          <div class="hero-delta">Лучший круг · -0.842 сек к прошлой тренировке</div>
+          <div class="hero-metrics">
+            <div class="mini-stat">
+              <span class="muted">Средний круг</span>
+              <strong>${formatLap(appState.avgLap)}</strong>
+            </div>
+            <div class="mini-stat">
+              <span class="muted">Рейтинг пилота</span>
+              <strong>${appState.rating}/100</strong>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn primary" type="button" data-route="live">Начать сессию</button>
+            <button class="btn" type="button" data-route="analysis">Открыть анализ</button>
+            <button class="btn" type="button" data-route="coach">Командный центр</button>
+          </div>
+        </section>
+
+        <section class="grid-2">
+          <div class="metric"><span class="metric-label">Сессий за неделю</span><span class="metric-value">12</span><span class="metric-unit">шт</span></div>
+          <div class="metric"><span class="metric-label">Средняя скорость</span><span class="metric-value">74</span><span class="metric-unit">км/ч</span></div>
+          <div class="metric"><span class="metric-label">Стабильность</span><span class="metric-value">84</span><span class="metric-unit">%</span></div>
+          <div class="metric"><span class="metric-label">AI-рейтинг</span><span class="metric-value">87</span><span class="metric-unit">/100</span></div>
+        </section>
+
+        <section class="card recommendation">
+          <div class="recommendation-head">
+            <div class="ai-badge">AI</div>
+            <div>
+              <strong>Позднее торможение в секторе 2</strong>
+              <div class="screen-subtitle">Потенциал улучшения: -0.18 сек</div>
+            </div>
+          </div>
+          <p class="muted">Начинай торможение на 4 метра раньше и выравнивай вход в дугу. Система видит потерю времени на позднем переносе веса.</p>
+        </section>
+
+        <section class="card" data-route="kart" style="cursor:pointer;">
+          <h2 class="card-title">Состояние карта</h2>
+          <div class="pill-row">
+            <span class="pill warning">Двигатель 92°</span>
+            <span class="pill success">6/6 датчиков</span>
+            <span class="pill live">Связь стабильна</span>
+          </div>
+        </section>
+      `;
+    }
+
+    function renderLive() {
+      const node = document.querySelector('[data-screen="live"]');
+      node.innerHTML = `
+        ${topbar("Сессия активна", `Круг 04 · Сектор 2 · ${appState.track}`, true)}
+        <section class="card hero">
+          <div class="screen-subtitle">Текущий круг</div>
+          <div class="hero-value" id="liveLapValue">${formatLap(appState.live.lap)}</div>
+          <div class="hero-delta" id="liveDeltaValue">+0.214 к лучшему темпу</div>
+          <div class="pill-row" style="margin-top:14px;">
+            <span class="pill ${appState.livePaused ? "warning" : "live"}" id="liveSessionPill">${appState.livePaused ? "Сессия на паузе" : "Запись идет"}</span>
+            <span class="pill brand">GPS online</span>
+          </div>
+        </section>
+
+        <section class="grid-2">
+          <div class="metric"><span class="metric-label">Скорость</span><span class="metric-value" id="liveSpeedValue">${appState.live.speed}</span><span class="metric-unit">км/ч</span></div>
+          <div class="metric"><span class="metric-label">Обороты</span><span class="metric-value" id="liveRpmValue">${appState.live.rpm}</span><span class="metric-unit">rpm</span></div>
+          <div class="metric"><span class="metric-label">Температура</span><span class="metric-value" id="liveTempValue">${appState.live.temp}</span><span class="metric-unit">°C</span></div>
+          <div class="metric"><span class="metric-label">Перегрузка</span><span class="metric-value" id="liveGValue">${appState.live.g}</span><span class="metric-unit">g</span></div>
+          <div class="metric"><span class="metric-label">Угол руля</span><span class="metric-value" id="liveSteerValue">${appState.live.steer}</span><span class="metric-unit">°</span></div>
+          <div class="metric"><span class="metric-label">Положение газа</span><span class="metric-value" id="liveThrottleValue">${appState.live.throttle}</span><span class="metric-unit">%</span></div>
+        </section>
+
+        <section class="track-map">
+          <div class="card-title">Карта трассы</div>
+          <svg viewBox="0 0 320 148" role="img" aria-label="Кольцевая трасса и положение карта">
+            <path class="track-road" d="M48 84 C54 46, 92 24, 134 24 C176 24, 206 42, 230 58 C256 76, 286 76, 294 58 C304 36, 300 92, 274 108 C246 126, 204 120, 178 102 C156 88, 132 90, 108 106 C82 124, 54 118, 48 84 Z" />
+            <path class="track-lane" d="M48 84 C54 46, 92 24, 134 24 C176 24, 206 42, 230 58 C256 76, 286 76, 294 58 C304 36, 300 92, 274 108 C246 126, 204 120, 178 102 C156 88, 132 90, 108 106 C82 124, 54 118, 48 84 Z" />
+            <path class="track-line" id="liveTrackPath" d="M48 84 C54 46, 92 24, 134 24 C176 24, 206 42, 230 58 C256 76, 286 76, 294 58 C304 36, 300 92, 274 108 C246 126, 204 120, 178 102 C156 88, 132 90, 108 106 C82 124, 54 118, 48 84 Z" />
+            <path class="track-start" d="M56 71 L74 79" />
+            <path class="track-sector" d="M83 28 L89 47" />
+            <path class="track-sector" d="M251 46 L240 63" />
+            <path class="track-sector" d="M144 114 L132 98" />
+            <text class="track-start-label" x="36" y="69">Start</text>
+            <text class="track-sector-label" x="72" y="25">S1</text>
+            <text class="track-sector-label" x="256" y="40">S2</text>
+            <text class="track-sector-label" x="147" y="128">S3</text>
+            <circle class="track-dot" id="liveTrackDot" cx="48" cy="84" r="8"></circle>
+          </svg>
+        </section>
+
+        <section class="chart-block">
+          <div class="card-title">Live telemetry</div>
+          <div class="telemetry-stack">
+            <div class="telemetry-legend">
+              <span class="telemetry-legend-item speed"><strong id="liveSpeedLegend">${appState.live.speed} км/ч</strong> скорость</span>
+              <span class="telemetry-legend-item rpm"><strong id="liveRpmLegend">${appState.live.rpm} rpm</strong> обороты</span>
+            </div>
+            <svg viewBox="0 0 320 120" role="img" aria-label="Графики live телеметрии">
+              <path class="telemetry-grid" d="M10 20 H310 M10 60 H310 M10 100 H310" />
+              <path class="telemetry-area" id="liveSpeedArea" d=""></path>
+              <path class="telemetry-line speed" id="liveSpeedLine" d=""></path>
+              <path class="telemetry-line rpm" id="liveRpmLine" d=""></path>
+            </svg>
+          </div>
+        </section>
+
+        <section class="card recommendation">
+          <div class="recommendation-head">
+            <div class="ai-badge">AI</div>
+            <div>
+              <strong>Стабильный выход из поворота 3</strong>
+              <div class="screen-subtitle">Потеря времени начинается перед связкой</div>
+            </div>
+          </div>
+          <p class="muted">Сейчас телеметрия видит уверенное ускорение, но резкое торможение перед сектором 2 ломает дельту.</p>
+        </section>
+
+        <div class="btn-row">
+          <button class="btn" type="button" data-action="pause" id="livePauseButton">${appState.livePaused ? "Продолжить" : "Пауза"}</button>
+          <button class="btn" type="button" data-action="mark-lap">Пометить круг</button>
+          <button class="btn" type="button" data-action="add-note">Заметка</button>
+          <button class="btn primary" type="button" data-route="complete">Завершить</button>
+        </div>
+      `;
+      updateLiveUI();
+    }
+
+    function updateLiveUI() {
+      const liveScreen = document.querySelector('[data-screen="live"]');
+      if (!liveScreen) return;
+
+      const telemetry = getLiveTelemetryPaths();
+      const delta = appState.live.delta.toFixed(3);
+      const deltaText = `${delta.startsWith("-") ? "" : "+"}${delta} к лучшему темпу`;
+      const pill = liveScreen.querySelector("#liveSessionPill");
+      const pauseButton = liveScreen.querySelector("#livePauseButton");
+
+      const setText = (selector, value) => {
+        const el = liveScreen.querySelector(selector);
+        if (el) el.textContent = value;
+      };
+
+      setText("#liveLapValue", formatLap(appState.live.lap));
+      setText("#liveDeltaValue", deltaText);
+      setText("#liveSpeedValue", String(appState.live.speed));
+      setText("#liveRpmValue", String(appState.live.rpm));
+      setText("#liveTempValue", String(appState.live.temp));
+      setText("#liveGValue", String(appState.live.g));
+      setText("#liveSteerValue", String(appState.live.steer));
+      setText("#liveThrottleValue", String(appState.live.throttle));
+      setText("#liveSpeedLegend", `${appState.live.speed} км/ч`);
+      setText("#liveRpmLegend", `${appState.live.rpm} rpm`);
+
+      const speedArea = liveScreen.querySelector("#liveSpeedArea");
+      const speedLine = liveScreen.querySelector("#liveSpeedLine");
+      const rpmLine = liveScreen.querySelector("#liveRpmLine");
+      if (speedArea) speedArea.setAttribute("d", telemetry.speedArea);
+      if (speedLine) speedLine.setAttribute("d", telemetry.speedLine);
+      if (rpmLine) rpmLine.setAttribute("d", telemetry.rpmLine);
+
+      if (pill) {
+        pill.textContent = appState.livePaused ? "Сессия на паузе" : "Запись идет";
+        pill.className = `pill ${appState.livePaused ? "warning" : "live"}`;
+      }
+
+      if (pauseButton) {
+        pauseButton.textContent = appState.livePaused ? "Продолжить" : "Пауза";
+      }
+
+      const trackPath = liveScreen.querySelector("#liveTrackPath");
+      const trackDot = liveScreen.querySelector("#liveTrackDot");
+      if (trackPath && trackDot && typeof trackPath.getTotalLength === "function") {
+        const totalLength = trackPath.getTotalLength();
+        const point = trackPath.getPointAtLength(totalLength * getLiveTrackProgress());
+        trackDot.setAttribute("cx", point.x.toFixed(2));
+        trackDot.setAttribute("cy", point.y.toFixed(2));
+      }
+    }
+
+    function renderComplete() {
+      const session = getSelectedSession();
+      const sectorStrength = session.track === "Indoor Track"
+        ? [72, 81, 68]
+        : session.id === "s3"
+          ? [83, 76, 71]
+          : [88, 74, 92];
+      const node = document.querySelector('[data-screen="complete"]');
+      node.innerHTML = `
+        ${topbar("Сессия завершена", `${session.date} · 18:58 · ${session.track}`)}
+        <section class="card hero">
+          <div class="screen-subtitle">Итог сессии</div>
+          <div class="hero-value">${formatLap(session.best)}</div>
+          <div class="hero-delta">Средний круг ${formatLap(session.avg)} · Всего кругов ${session.laps} · Стабильность ${session.stability}%</div>
+        </section>
+
+        <section class="card">
+          <h2 class="card-title">Сектора</h2>
+          <div class="split-row"><span>Сектор 1</span><strong>${session.sectors[0]}</strong><span style="color:${session.sectorDelta[0].startsWith("-") ? "var(--green)" : "var(--orange)"};">${session.sectorDelta[0]}</span></div>
+          <div class="split-row"><span>Сектор 2</span><strong>${session.sectors[1]}</strong><span style="color:${session.sectorDelta[1].startsWith("-") ? "var(--green)" : "var(--orange)"};">${session.sectorDelta[1]}</span></div>
+          <div class="split-row"><span>Сектор 3</span><strong>${session.sectors[2]}</strong><span style="color:${session.sectorDelta[2].startsWith("-") ? "var(--green)" : "var(--orange)"};">${session.sectorDelta[2]}</span></div>
+          <div class="sector-bars">
+            <div class="sector-bar">
+              <div class="split-row" style="margin-top:0;"><span>Темп сектора 1</span><strong>${sectorStrength[0]}%</strong></div>
+              <div class="sector-rail"><div class="sector-fill" style="width:${sectorStrength[0]}%;"></div></div>
+            </div>
+            <div class="sector-bar">
+              <div class="split-row" style="margin-top:0;"><span>Темп сектора 2</span><strong>${sectorStrength[1]}%</strong></div>
+              <div class="sector-rail"><div class="sector-fill" style="width:${sectorStrength[1]}%;"></div></div>
+            </div>
+            <div class="sector-bar">
+              <div class="split-row" style="margin-top:0;"><span>Темп сектора 3</span><strong>${sectorStrength[2]}%</strong></div>
+              <div class="sector-rail"><div class="sector-fill" style="width:${sectorStrength[2]}%;"></div></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card recommendation">
+          <div class="recommendation-head">
+            <div class="ai-badge">AI</div>
+            <div>
+              <strong>${session.aiTitle}</strong>
+              <div class="screen-subtitle">Потенциал улучшения: ${session.aiGain}</div>
+            </div>
+          </div>
+          <p class="muted">${session.aiText}</p>
+        </section>
+
+        <div class="btn-row">
+          <button class="btn primary" type="button" data-route="compare">Сравнить круги</button>
+          <button class="btn" type="button" data-route="analysis">Подробный анализ</button>
+        </div>
+      `;
+    }
+
+    function renderCompare() {
+      const compare = getCompareState();
+      const focus = compare.focusText[appState.compareFocus];
+      const chart = getCompareTelemetryPaths();
+      const node = document.querySelector('[data-screen="compare"]');
+      node.innerHTML = `
+        ${topbar("Сравнение кругов", compare.title)}
+        <section class="card">
+          <div class="chip-row">
+            <button class="chip ${appState.compareFocus === "a" ? "active" : ""}" type="button" data-action="compare-focus" data-value="a">${appState.compareTrack === "tomsk" ? "Круг 06" : "Круг 03"}</button>
+            <button class="chip ${appState.compareFocus === "b" ? "active" : ""}" type="button" data-action="compare-focus" data-value="b">${appState.compareTrack === "tomsk" ? "Круг 11" : "Круг 08"}</button>
+            <button class="chip ${appState.compareTrack === "tomsk" ? "active" : ""}" type="button" data-action="compare-track" data-value="tomsk">Tomsk Ring</button>
+            <button class="chip ${appState.compareTrack === "indoor" ? "active" : ""}" type="button" data-action="compare-track" data-value="indoor">Indoor</button>
+          </div>
+          <div class="split-row" style="margin-top:14px;">
+            <strong style="font-size:18px;color:var(--text);">${compare.lapA}</strong>
+            <span>против</span>
+            <strong style="font-size:18px;color:var(--text);">${compare.lapB}</strong>
+          </div>
+          <div class="hero-delta" style="margin-top:8px;">Разница времени: ${compare.delta}</div>
+        </section>
+
+        <section class="chart-block">
+          <div class="card-title">Скорость по кругу</div>
+          <svg viewBox="0 0 320 140" role="img" aria-label="Сравнение двух кругов">
+            <path class="telemetry-grid" d="M10 24 H310 M10 70 H310 M10 116 H310" />
+            <path class="chart-line" d="${chart.first}"></path>
+            <path class="chart-line secondary" d="${chart.second}"></path>
+          </svg>
+        </section>
+
+        <section class="card">
+          <h2 class="card-title">Сектора</h2>
+          ${compare.sectors.map(item => `
+            <div class="split-row">
+              <span>${item.name}</span>
+              <strong>${item.values}</strong>
+              <span style="color:${item.tone === "green" ? "var(--green)" : "var(--orange)"};">${item.delta}</span>
+            </div>
+          `).join("")}
+        </section>
+
+        <section class="card recommendation">
+          <div class="recommendation-head">
+            <div class="ai-badge">AI</div>
+            <div>
+              <strong>${focus.title}</strong>
+              <div class="screen-subtitle">${focus.subtitle}</div>
+            </div>
+          </div>
+          <p class="muted">${focus.body}</p>
+        </section>
+      `;
+    }
+
+    function renderAnalysis() {
+      const session = getSelectedSession();
+      const node = document.querySelector('[data-screen="analysis"]');
+      node.innerHTML = `
+        ${topbar("AI-анализ", "Оценка сессии и персональные рекомендации")}
+        <section class="card hero">
+          <div class="screen-subtitle">Оценка сессии</div>
+          <div class="score">${appState.rating}/100</div>
+          <div class="hero-delta">Потенциал улучшения: -0.61 сек</div>
+          <div class="progress-bar"><span style="width:${appState.rating}%;"></span></div>
+        </section>
+
+        <section class="card">
+          <h2 class="card-title">Сильные стороны</h2>
+          <div class="timeline">
+            <div class="timeline-step">Стабильный темп в секторе 1</div>
+            <div class="timeline-step">Уверенный выход из медленных поворотов</div>
+            <div class="timeline-step">Хороший контроль подачи газа</div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2 class="card-title">Ошибки</h2>
+          <div class="timeline">
+            <div class="timeline-step">Позднее торможение в секторе 2</div>
+            <div class="timeline-step">Резкий вход в поворот 3</div>
+            <div class="timeline-step">Потеря траектории в последнем секторе</div>
+          </div>
+        </section>
+
+        <section class="card recommendation">
+          <div class="recommendation-head">
+            <div class="ai-badge">AI</div>
+            <div>
+              <strong>${session.track === "Indoor Track" ? "Сгладь перекладку в центре трассы" : "Раньше открывай газ после апекса"}</strong>
+              <div class="screen-subtitle">Ожидаемый выигрыш: ${session.track === "Indoor Track" ? "-0.17 сек" : "-0.24 сек"}</div>
+            </div>
+          </div>
+          <p class="muted">${session.track === "Indoor Track" ? "На узкой связке карт слишком долго остается в повороте. Если раньше выровнять руль, машина начнет ускоряться заметно раньше." : "Самое большое окно для улучшения — на выходе из медленных связок. Уменьши паузу между апексом и разгоном."}</p>
+        </section>
+
+        <div class="btn-row">
+          <button class="btn primary" type="button" data-route="compare">Сравнить круги</button>
+          <button class="btn" type="button" data-route="profile">История прогресса</button>
+        </div>
+      `;
+    }
+
+    function renderHistory() {
+      const sessions = getFilteredHistory();
+      const node = document.querySelector('[data-screen="history"]');
+      node.innerHTML = `
+        ${topbar("История", "Все сессии и быстрый фильтр")}
+        <section class="card">
+          <div class="chip-row">
+            <button class="chip ${appState.historyFilter === "all" ? "active" : ""}" type="button" data-action="history-filter" data-value="all">Все</button>
+            <button class="chip ${appState.historyFilter === "tomsk" ? "active" : ""}" type="button" data-action="history-filter" data-value="tomsk">Tomsk Ring</button>
+            <button class="chip ${appState.historyFilter === "indoor" ? "active" : ""}" type="button" data-action="history-filter" data-value="indoor">Indoor</button>
+            <button class="chip ${appState.historyFilter === "month" ? "active" : ""}" type="button" data-action="history-filter" data-value="month">30 дней</button>
+          </div>
+        </section>
+        ${sessions.map(item => `
+          <div class="list-item" data-action="open-session" data-session="${item.id}">
+            <strong>${item.date} · ${item.track}</strong>
+            <span>Лучший круг ${formatLap(item.best)} · Кругов ${item.laps} · Дельта ${item.delta}</span>
+          </div>
+        `).join("")}
+      `;
+    }
+
+    function renderProfile() {
+      const node = document.querySelector('[data-screen="profile"]');
+      node.innerHTML = `
+        ${topbar("Профиль пилота", `${appState.pilot} · Рейтинг ${appState.rating}/100`)}
+        <section class="card">
+          <div style="display:flex;align-items:center;gap:14px;">
+            <div style="width:60px;height:60px;border-radius:50%;background:rgba(139,92,246,0.18);display:flex;align-items:center;justify-content:center;font-weight:800;color:#dac8ff;">МЦ</div>
+            <div>
+              <strong style="display:block;font-size:18px;">${appState.pilot}</strong>
+              <span class="screen-subtitle">Пилот · Tomsk Ring Club</span>
+            </div>
+          </div>
+          <div class="hero-metrics">
+            <div class="mini-stat"><span class="muted">Лучший круг</span><strong>${formatLap(appState.bestLap)}</strong></div>
+            <div class="mini-stat"><span class="muted">Стабильность</span><strong>84%</strong></div>
+          </div>
+        </section>
+
+        <section class="chart-block">
+          <div class="card-title">Прогресс за 30 дней</div>
+          <svg viewBox="0 0 320 140" role="img" aria-label="График прогресса пилота">
+            <path class="chart-line" d="M10 108 C42 112, 74 102, 110 96 S180 70, 220 64 S290 36, 310 28"></path>
+          </svg>
+        </section>
+
+        <section class="card">
+          <h2 class="card-title">Сильные стороны</h2>
+          <div class="timeline">
+            <div class="timeline-step">Хороший темп на длинных дугах</div>
+            <div class="timeline-step">Уверенное ускорение</div>
+            <div class="timeline-step">Стабильность в первой половине сессии</div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2 class="card-title">Зоны роста</h2>
+          <div class="timeline">
+            <div class="timeline-step">Торможение перед сектором 2</div>
+            <div class="timeline-step">Поздний апекс в повороте 5</div>
+            <div class="timeline-step">Падение темпа после 6 минуты</div>
+          </div>
+        </section>
+      `;
+    }
+
+    function renderKart() {
+      const node = document.querySelector('[data-screen="kart"]');
+      node.innerHTML = `
+        ${topbar("Состояние карта", "Карт №12 · Сессия готова")}
+        <section class="card hero">
+          <div class="pill-row">
+            <span class="pill success">Подключен</span>
+            <span class="pill live">6/6 датчиков</span>
+            <span class="pill brand">Питание 87%</span>
+          </div>
+          <p class="screen-subtitle" style="margin-top:14px;">Все основные системы готовы к заезду. Контроль температуры нужен после 10 минуты активной сессии.</p>
+        </section>
+
+        <section class="grid-2">
+          <div class="metric"><span class="metric-label">Двигатель</span><span class="metric-value">92</span><span class="metric-unit">°C</span></div>
+          <div class="metric"><span class="metric-label">Датчики</span><span class="metric-value">6/6</span><span class="metric-unit">ok</span></div>
+          <div class="metric"><span class="metric-label">Связь</span><span class="metric-value">98</span><span class="metric-unit">%</span></div>
+          <div class="metric"><span class="metric-label">Питание</span><span class="metric-value">87</span><span class="metric-unit">%</span></div>
+        </section>
+
+        <section class="card">
+          <h2 class="card-title">Предупреждения</h2>
+          <div class="timeline">
+            <div class="timeline-step">Проверить температуру после 10 минуты</div>
+            <div class="timeline-step">Зафиксировать вибрацию в заднем узле на следующем ТО</div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2 class="card-title">История обслуживания</h2>
+          <div class="timeline">
+            <div class="timeline-step">Замена датчика скорости · 28 апреля</div>
+            <div class="timeline-step">Проверка тормозной линии · 22 апреля</div>
+            <div class="timeline-step">Калибровка телеметрии · 18 апреля</div>
+          </div>
+        </section>
+      `;
+    }
+
+    function renderCoach() {
+      const node = document.querySelector('[data-screen="coach"]');
+      node.innerHTML = `
+        ${topbar("Командный центр", `${appState.coach.teamName} · Тренерский обзор`)}
+        <section class="card hero">
+          <div class="screen-subtitle">Обзор команды</div>
+          <div class="hero-value">${formatLap(appState.coach.bestTeamLap)}</div>
+          <div class="hero-delta">Лучший командный круг · ${appState.coach.connectedPilots} пилота онлайн · ${appState.coach.activeKarts} карта готовы</div>
+          <div class="hero-metrics">
+            <div class="mini-stat">
+              <span class="muted">Активные пилоты</span>
+              <strong>${appState.coach.connectedPilots}</strong>
+            </div>
+            <div class="mini-stat">
+              <span class="muted">Картов на линии</span>
+              <strong>${appState.coach.activeKarts}</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="chart-block">
+          <div class="card-title">Темп команды по сессиям</div>
+          <svg viewBox="0 0 320 140" role="img" aria-label="Сравнение пилотов команды">
+            <path class="telemetry-grid" d="M10 24 H310 M10 70 H310 M10 116 H310" />
+            <path class="chart-line" d="${buildLinePath(createSeries(16, 69, 8, 2, 1.6, 0.18), 58, 86, 320, 140)}"></path>
+            <path class="chart-line secondary" d="${buildLinePath(createSeries(16, 66, 6, 6, 1.9, 0.12), 58, 86, 320, 140)}"></path>
+          </svg>
+          <div class="telemetry-legend" style="margin-top:10px;">
+            <span class="telemetry-legend-item speed"><strong>Максим</strong> лучший темп</span>
+            <span class="telemetry-legend-item rpm"><strong>Артем</strong> эталонный круг</span>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2 class="card-title">Пилоты</h2>
+          ${appState.coach.pilots.map(pilot => `
+            <div class="split-row">
+              <span>${pilot.name}<br><span class="muted">${pilot.status}</span></span>
+              <strong style="color:${pilot.trend === "green" ? "var(--green)" : "var(--orange)"};">${pilot.delta}</strong>
+              <span>${pilot.focus}</span>
+            </div>
+          `).join("")}
+        </section>
+
+        <section class="card recommendation">
+          <div class="recommendation-head">
+            <div class="ai-badge">AI</div>
+            <div>
+              <strong>Приоритеты тренера на текущую серию</strong>
+              <div class="screen-subtitle">Где быстрее всего получить улучшение команды</div>
+            </div>
+          </div>
+          <div class="timeline">
+            ${appState.coach.coachAlerts.map(item => `<div class="timeline-step">${item}</div>`).join("")}
+          </div>
+        </section>
+
+        <div class="btn-row">
+          <button class="btn primary" type="button" data-route="history">Открыть все сессии</button>
+          <button class="btn" type="button" data-route="kart">Состояние техники</button>
+        </div>
+      `;
+    }
+
+    function render() {
+      renderAllScreens();
+      renderNav();
+      renderSide();
+      activateScreen(appState.currentScreen, { replaceStack: true });
+    }
+
+    document.addEventListener("click", (event) => {
+      const actionTarget = event.target.closest("[data-action]");
+      if (actionTarget) {
+        const action = actionTarget.getAttribute("data-action");
+
+        if (action === "pause") {
+          appState.livePaused = !appState.livePaused;
+          if (appState.livePaused) {
+            appState.sessionActive = false;
+            clearInterval(liveInterval);
+            logEvent("Сессия поставлена на паузу");
+          } else {
+            appState.sessionActive = true;
+            logEvent("Сессия продолжена");
+            manageLiveState();
+          }
+          renderLive();
+          renderSide();
+          return;
+        }
+
+        if (action === "notify") {
+          appState.notificationsOpen = true;
+          renderOverlay();
+          logEvent("Открыт центр уведомлений");
+          return;
+        }
+
+        if (action === "close-notifications") {
+          appState.notificationsOpen = false;
+          renderOverlay();
+          return;
+        }
+
+        if (action === "mark-lap") {
+          logEvent(`Круг отмечен на ${formatLap(appState.live.lap)}`);
+          return;
+        }
+
+        if (action === "add-note") {
+          logEvent("Добавлена заметка: позднее торможение перед сектором 2");
+          return;
+        }
+
+        if (action === "history-filter") {
+          appState.historyFilter = actionTarget.getAttribute("data-value");
+          renderHistory();
+          logEvent(`Применен фильтр истории: ${actionTarget.textContent.trim()}`);
+          return;
+        }
+
+        if (action === "open-session") {
+          appState.selectedSessionId = actionTarget.getAttribute("data-session");
+          const session = getSelectedSession();
+          renderComplete();
+          renderAnalysis();
+          logEvent(`Открыта сессия ${session.date} · ${session.track}`);
+          goTo("complete");
+          return;
+        }
+
+        if (action === "compare-focus") {
+          appState.compareFocus = actionTarget.getAttribute("data-value");
+          renderCompare();
+          logEvent(`Выбран ${actionTarget.textContent.trim()} для детального сравнения`);
+          return;
+        }
+
+        if (action === "compare-track") {
+          appState.compareTrack = actionTarget.getAttribute("data-value");
+          appState.compareFocus = "a";
+          renderCompare();
+          logEvent(`Открыто сравнение для ${actionTarget.textContent.trim()}`);
+          return;
+        }
+      }
+
+      const routeTarget = event.target.closest("[data-route]");
+      if (!routeTarget) return;
+      const route = routeTarget.getAttribute("data-route");
+      const customLog = routeTarget.getAttribute("data-log");
+      const defaultLog = `Переход на экран ${screenTitles[route] || route}`;
+      if (route === "live") {
+        appState.livePaused = false;
+        logEvent("Запущен сценарий live-заезда");
+      } else if (route === "complete") {
+        clearInterval(liveInterval);
+        appState.sessionActive = false;
+        logEvent(customLog || "Сессия завершена, открыт итоговый экран");
+      } else {
+        logEvent(customLog || defaultLog);
+      }
+      goTo(route);
+    });
+
+    initTelegramMiniApp();
+    initTelegramLaunchMode();
+    render();
+    logEvent("HTML-прототип телеметрии готов к демонстрации");
+  </script>
+</body>
+</html>
